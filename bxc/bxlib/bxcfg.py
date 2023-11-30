@@ -9,6 +9,16 @@ class CFGNode:
         self.body   = []        # Basic block body (excluding labels, (c)jumps & ret)
         self.cjumps = []        # conditional jumps
         self.jump   = None      # Final jump (if the block terminates with "ret", it is set to False)
+        self.phi_functions = []
+    
+    def __repr__(self) -> str:
+        return f'CFGNode({self.label}, {self.body}, {self.cjumps}, {self.jump}, {self.phi_functions})'
+    
+    def __str__(self) -> str:
+        return f'CFGNode({self.label}, {self.body}, {self.cjumps}, {self.jump}, {self.phi_functions})'
+    
+    
+        
 
 # --------------------------------------------------------------------
 class CFG:
