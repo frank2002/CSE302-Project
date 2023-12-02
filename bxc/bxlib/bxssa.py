@@ -5,10 +5,106 @@ class SSA:
     def __init__(self, cfg):
         self.cfg = cfg
         self.ssa = None
-        self.version_counter = {}
+        self.all_instructions = []
+        self.instr_dict = {}
+        self.version_counter = 0
+
+    def _get_new_variable(self, variable: str):
+        self.version_counter += 1
+        return f"{variable}.{self.version_counter}"
 
     def add_phi_functions(self):
-        pass
+        # livein analysis
+
+        block_liveness = self._liveness_analysis()
+
+        # initialize phi functions
+        for block_label, block in self.cfg.cfg.items():
+            self.cfg.cfg[block_label].phi_functions = {}
+            for variable in block_liveness[block_label]:
+                self.cfg.cfg[block_label].phi_functions[variable] = []
+
+        # add versions for defs
+        for block_label, block in self.cfg.cfg.items():
+            new_phi_functions = {}
+            for variable, phi_functions in block.phi_functions.items():
+                new_phi_functions[self._get_new_variable(variable)] = phi_functions
+
+            self.cfg.cfg[block_label].phi_functions = new_phi_functions
+
+            for instr in block.body:
+                instr.result = self._get_new_variable(instr.result)
+
+        # update all variable versions
+        for block_label, block in self.cfg.cfg.items():
+            for index, instr in enumerate(reversed(block.body)):
+                old_variable = instr.arguments
+                new_variable = []
+                for variable in old_variable:
+                    is_found = False
+
+                    if isinstance(variable, str) and variable.startswith("%"):
+                        for index2, instr2 in enumerate(reversed(block.body)):
+                            if index2 > index and variable == instr2.result[:2]:
+                                new_variable.append(instr2.result)
+                                is_found = True
+                                break
+                        if not is_found:
+                            for key in block.phi_functions:
+                                if variable == key[:2]:
+                                    new_variable.append(key)
+                                    break
+                    else:
+                        new_variable.append(variable)
+
+                instr.arguments = new_variable
+
+            for index, instr in enumerate(reversed(block.cjumps)):
+                old_variable = instr[1]
+                new_variable = []
+                for variable in old_variable:
+                    is_found = False
+                    if isinstance(variable, str) and variable.startswith("%"):
+                        for index2, instr2 in enumerate(reversed(block.body)):
+                            if variable == instr2.result[:2]:
+                                new_variable.append(instr2.result)
+                                is_found = True
+                                break
+                        if not is_found:
+                            for key in block.phi_functions:
+                                if variable == key[:2]:
+                                    new_variable.append(key)
+                                    break
+                    else:
+                        new_variable.append(variable)
+
+                self.cfg.cfg[block_label].cjumps[len(block.cjumps) - 1 - index] = (
+                    instr[0],
+                    new_variable,
+                )
+
+            if block.jump:
+                if block.jump[0] == "ret":
+                    is_found = False
+                    variable = block.jump[1]
+                    if isinstance(variable, str) and variable.startswith("%"):
+                        for index2, instr2 in enumerate(reversed(block.body)):
+                            if variable == instr2.result[:2]:
+                                self.cfg.cfg[block_label].jump = ("ret", instr2.result)
+
+                                is_found = True
+                                break
+                        if not is_found:
+                            for key in block.phi_functions:
+                                print("found")
+                                if variable == key[:2]:
+                                    self.cfg.cfg[block_label].jump = (
+                                        "ret",
+                                        key,
+                                    )
+                                    break
+                    else:
+                        self.cfg.cfg[block_label].jump = ("ret", instr2.result)
 
     def _liveness_analysis(self):
         # Initialize livein for every instruction in every block
@@ -23,9 +119,13 @@ class SSA:
                 all_instructions.append(index)
                 instr_dict[index] = instr
                 line_counter += 1
-                
+
             for i, instr in enumerate(block.cjumps):
-                use_list = [arg for arg in instr[1] if isinstance(arg, str) and arg.startswith("%")]
+                use_list = [
+                    arg
+                    for arg in instr[1]
+                    if isinstance(arg, str) and arg.startswith("%")
+                ]
                 index = (block_label, i + line_counter)
                 livein[index] = set(use_list)
                 all_instructions.append(index)
@@ -35,7 +135,6 @@ class SSA:
             if block.jump:
                 index = (block_label, line_counter)
                 if block.jump[0] == "ret":
-
                     livein[index] = set([block.jump[1]])
                 else:
                     livein[index] = set()
@@ -45,19 +144,18 @@ class SSA:
         # Step 2: Iteratively update livein sets
         changed = True
         while changed:
-            print("loop")
             changed = False
             livein_copy = livein.copy()
             for index1, instr1 in enumerate(reversed(all_instructions)):
                 successors = self.get_successors(instr1, instr_dict, all_instructions)
 
-                
                 for instr2 in successors:
-                    livein[instr1] = livein[instr1] | (livein[instr2] - self._get_def(instr_dict[instr1]))
+                    livein[instr1] = livein[instr1] | (
+                        livein[instr2] - self._get_def(instr_dict[instr1])
+                    )
 
                 if livein[instr1] != livein_copy[instr1]:
                     changed = True
-                print(livein)
 
         # return the first livein for each label
         block_liveness = {}
@@ -66,14 +164,17 @@ class SSA:
             if block_label not in block_liveness:
                 block_liveness[block_label] = livein[instr]
 
+        self.all_instructions = all_instructions
+        self.instr_dict = instr_dict
         return block_liveness
-    
+
     def get_successors(self, instruction_index, instr_dict, all_instructions):
         def last_index(lst, element):
             for item in reversed(lst):
                 if item[0] == element:
                     return item[1]
             return None
+
         block_label, instr_index = instruction_index
         successors = []
 
@@ -81,22 +182,22 @@ class SSA:
 
         if instr_index < len(current_block.body):
             successors.append((block_label, instr_index + 1))
-  
+
         elif instr_index == last_index(all_instructions, block_label):
             if current_block.jump[0] == "jmp":
                 next_label = current_block.jump[1]
                 successors.append((next_label, 0))
-               
+
             elif current_block.jump[0] == "ret":
                 pass
-        elif instr_index > len(current_block.body) - 1 and instr_index < last_index(all_instructions, block_label):
+        elif instr_index > len(current_block.body) - 1 and instr_index < last_index(
+            all_instructions, block_label
+        ):
             successors.append((block_label, instr_index + 1))
             next_label = instr_dict[(block_label, instr_index)][1][1]
             successors.append((next_label, 0))
-        
-        return successors
-                
 
+        return successors
 
     def _get_use(self, instr):
         # Assuming 'instr' is a TAC object and arguments are a list of used variables
@@ -166,4 +267,5 @@ if __name__ == "__main__":
     )
 
     ssa = SSA(fib_cfg)
-    print(ssa._liveness_analysis())
+    ssa.add_phi_functions()
+    print(ssa.cfg.cfg)
