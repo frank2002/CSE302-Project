@@ -8,12 +8,20 @@ class SSA:
         self.all_instructions = []
         self.instr_dict = {}
         self.version_counter = 0
+    
+    def transform(self):
+
+        self._add_phi_functions()
+        self._update_phi_functions()
+        self.ssa = self.cfg
+        return self.ssa
+
 
     def _get_new_variable(self, variable: str):
         self.version_counter += 1
         return f"{variable}.{self.version_counter}"
 
-    def add_phi_functions(self):
+    def _add_phi_functions(self):
         # livein analysis
 
         block_liveness = self._liveness_analysis()
@@ -45,13 +53,13 @@ class SSA:
 
                     if isinstance(variable, str) and variable.startswith("%"):
                         for index2, instr2 in enumerate(reversed(block.body)):
-                            if index2 > index and variable == instr2.result[:2]:
+                            if index2 > index and variable == instr2.result.split(".")[0]:
                                 new_variable.append(instr2.result)
                                 is_found = True
                                 break
                         if not is_found:
                             for key in block.phi_functions:
-                                if variable == key[:2]:
+                                if variable == key.split(".")[0]:
                                     new_variable.append(key)
                                     break
                     else:
@@ -66,13 +74,13 @@ class SSA:
                     is_found = False
                     if isinstance(variable, str) and variable.startswith("%"):
                         for index2, instr2 in enumerate(reversed(block.body)):
-                            if variable == instr2.result[:2]:
+                            if variable == instr2.result.split(".")[0]:
                                 new_variable.append(instr2.result)
                                 is_found = True
                                 break
                         if not is_found:
                             for key in block.phi_functions:
-                                if variable == key[:2]:
+                                if variable == key.split(".")[0]:
                                     new_variable.append(key)
                                     break
                     else:
@@ -89,15 +97,14 @@ class SSA:
                     variable = block.jump[1]
                     if isinstance(variable, str) and variable.startswith("%"):
                         for index2, instr2 in enumerate(reversed(block.body)):
-                            if variable == instr2.result[:2]:
+                            if variable == instr2.result.split(".")[0]:
                                 self.cfg.cfg[block_label].jump = ("ret", instr2.result)
 
                                 is_found = True
                                 break
                         if not is_found:
                             for key in block.phi_functions:
-                                print("found")
-                                if variable == key[:2]:
+                                if variable == key.split(".")[0]:
                                     self.cfg.cfg[block_label].jump = (
                                         "ret",
                                         key,
@@ -105,6 +112,51 @@ class SSA:
                                     break
                     else:
                         self.cfg.cfg[block_label].jump = ("ret", instr2.result)
+
+
+    def _update_phi_functions(self):
+
+
+        for block_label, block in self.cfg.cfg.items():
+            predecessor_blocks = self._get_predecessor_blocks(block_label)
+
+            for variable, phi_functions in block.phi_functions.items():
+                for predecessor_block in predecessor_blocks:
+                    defined_variables = self._get_block_defined_variables(
+                        predecessor_block, variable
+                    )
+                    if defined_variables:
+                        self.cfg.cfg[block_label].phi_functions[variable].append(
+                            (predecessor_block, defined_variables[variable])
+                        )
+            
+                    
+
+    def _get_predecessor_blocks(self, block_label): 
+        predecessor = []
+        for block_label2, block in self.cfg.cfg.items():
+            for instr in block.cjumps:
+                if instr[1][1] == block_label:
+                    predecessor.append(block_label2)
+                    break
+            if block.jump and block.jump[1] == block_label:
+                predecessor.append(block_label2)
+        return predecessor          
+
+    def _get_block_defined_variables(self, block_label, variable):
+        block = self.cfg.cfg[block_label]
+        defined_variables = {}
+        variable_prefix = variable.split(".")[0]
+        for key, _ in block.phi_functions.items():
+            if key.startswith(variable_prefix):
+                defined_variables[variable] = key
+        
+        for instr in block.body:
+            if instr.result.startswith(variable_prefix):
+                defined_variables[variable] = instr.result
+
+        return defined_variables
+
 
     def _liveness_analysis(self):
         # Initialize livein for every instruction in every block
@@ -218,9 +270,7 @@ class SSA:
             return {instr.result}
         return set()
 
-    def _is_use_instruction(self, instruction):
-        # Implement logic to determine if an instruction uses a variable
-        pass
+
 
 
 if __name__ == "__main__":
@@ -267,5 +317,4 @@ if __name__ == "__main__":
     )
 
     ssa = SSA(fib_cfg)
-    ssa.add_phi_functions()
-    print(ssa.cfg.cfg)
+    print(ssa.transform().cfg)

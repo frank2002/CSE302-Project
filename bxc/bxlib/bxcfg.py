@@ -15,10 +15,10 @@ class CFGNode:
         self.phi_functions = {}
 
     def __str__(self) -> str:
-        return f"body: {self.body}\ncjumps: {self.cjumps}\njump: {self.jump}\nphi_functions: {self.phi_functions}\n"
+        return f"\nbody: {self.body}\ncjumps: {self.cjumps}\njump: {self.jump}\nphi_functions: {self.phi_functions}\n\n"
 
     def __repr__(self) -> str:
-        return f"body: {self.body}\ncjumps: {self.cjumps}\njump: {self.jump}\nphi_functions: {self.phi_functions}\n"
+        return f"\nbody: {self.body}\ncjumps: {self.cjumps}\njump: {self.jump}\nphi_functions: {self.phi_functions}\n\n"
 
 
 # --------------------------------------------------------------------
