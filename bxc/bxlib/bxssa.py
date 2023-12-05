@@ -8,14 +8,29 @@ class SSA:
         self.all_instructions = []
         self.instr_dict = {}
         self.version_counter = 0
-    
-    def transform(self):
 
+    def transform(self):
         self._add_phi_functions()
         self._update_phi_functions()
         self.ssa = self.cfg
         return self.ssa
 
+    def null_choice_elimination(self):
+        for block_label, block in self.cfg.cfg.items():
+            phi_functions = block.phi_functions
+            for variable, phi_function in phi_functions.items():
+                version = variable.split(".")[1]
+                is_same = True
+                for block_label2, variable2 in phi_function:
+                    version2 = variable2.split(".")[1]
+                    if version != version2:
+                        is_same = False
+                        break
+                if is_same:
+                    phi_functions.pop(variable)
+
+    def rename_elimination(self):
+        pass
 
     def _get_new_variable(self, variable: str):
         self.version_counter += 1
@@ -53,7 +68,10 @@ class SSA:
 
                     if isinstance(variable, str) and variable.startswith("%"):
                         for index2, instr2 in enumerate(reversed(block.body)):
-                            if index2 > index and variable == instr2.result.split(".")[0]:
+                            if (
+                                index2 > index
+                                and variable == instr2.result.split(".")[0]
+                            ):
                                 new_variable.append(instr2.result)
                                 is_found = True
                                 break
@@ -113,10 +131,7 @@ class SSA:
                     else:
                         self.cfg.cfg[block_label].jump = ("ret", instr2.result)
 
-
     def _update_phi_functions(self):
-
-
         for block_label, block in self.cfg.cfg.items():
             predecessor_blocks = self._get_predecessor_blocks(block_label)
 
@@ -129,10 +144,8 @@ class SSA:
                         self.cfg.cfg[block_label].phi_functions[variable].append(
                             (predecessor_block, defined_variables[variable])
                         )
-            
-                    
 
-    def _get_predecessor_blocks(self, block_label): 
+    def _get_predecessor_blocks(self, block_label):
         predecessor = []
         for block_label2, block in self.cfg.cfg.items():
             for instr in block.cjumps:
@@ -141,7 +154,7 @@ class SSA:
                     break
             if block.jump and block.jump[1] == block_label:
                 predecessor.append(block_label2)
-        return predecessor          
+        return predecessor
 
     def _get_block_defined_variables(self, block_label, variable):
         block = self.cfg.cfg[block_label]
@@ -150,13 +163,12 @@ class SSA:
         for key, _ in block.phi_functions.items():
             if key.startswith(variable_prefix):
                 defined_variables[variable] = key
-        
+
         for instr in block.body:
             if instr.result.startswith(variable_prefix):
                 defined_variables[variable] = instr.result
 
         return defined_variables
-
 
     def _liveness_analysis(self):
         # Initialize livein for every instruction in every block
@@ -269,8 +281,6 @@ class SSA:
         ):
             return {instr.result}
         return set()
-
-
 
 
 if __name__ == "__main__":
