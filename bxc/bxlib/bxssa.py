@@ -1,4 +1,8 @@
+import copy
+import time
+
 from .bxcfg import *
+from .union_find import UnionFind
 
 
 class SSA:
@@ -12,12 +16,24 @@ class SSA:
     def transform(self):
         self._add_phi_functions()
         self._update_phi_functions()
+
+        is_changed = True
+        while is_changed:
+            is_changed = False
+
+            changed1 = self.null_choice_elimination()
+            changed2 = self.rename_elimination()
+
+            is_changed = changed1 or changed2
+
         self.ssa = self.cfg
         return self.ssa
 
-    def null_choice_elimination(self):
+    def null_choice_elimination(self) -> bool:
+        is_changed = False
         for block_label, block in self.cfg.cfg.items():
             phi_functions = block.phi_functions
+            new_phi_functions = phi_functions.copy()
             for variable, phi_function in phi_functions.items():
                 version = variable.split(".")[1]
                 is_same = True
@@ -27,10 +43,92 @@ class SSA:
                         is_same = False
                         break
                 if is_same:
-                    phi_functions.pop(variable)
+                    new_phi_functions.pop(variable)
+                    is_changed = True
 
-    def rename_elimination(self):
-        pass
+            self.cfg.cfg[block_label].phi_functions = new_phi_functions
+
+        return is_changed
+
+    def rename_elimination(self) -> bool:
+        uf = UnionFind()
+        is_changed = False
+
+        for block_label, block in self.cfg.cfg.items():
+            new_phi_functions = block.phi_functions.copy()
+            for variable, phi_function in block.phi_functions.items():
+                v = None
+                is_qualified = True
+                if len(phi_function) == 1:
+                    uf.union(phi_function[0][1], variable)
+                    is_changed = True
+                    new_phi_functions.pop(variable)
+                else:
+                    for block_label2, variable2 in phi_function:
+                        if variable2 == variable:
+                            continue
+                        elif not v:
+                            v = variable2
+                        else:
+                            if v != variable2:
+                                is_qualified = False
+                                break
+                    if is_qualified:
+                        uf.union(v, variable)
+                        new_phi_functions.pop(variable)
+                        is_changed = True
+
+            self.cfg.cfg[block_label].phi_functions = new_phi_functions
+
+        for block_label, block in self.cfg.cfg.items():
+            for instr in block.body:
+                new_arguments = []
+                for argument in instr.arguments:
+                    if isinstance(argument, str) and argument.startswith("%"):
+                        new_arguments.append(uf.find(argument))
+                    else:
+                        new_arguments.append(argument)
+                if instr.arguments != new_arguments:
+                    is_changed = True
+
+                instr.arguments = new_arguments
+
+            for index, instr in enumerate(reversed(block.cjumps)):
+                new_arguments = []
+                for argument in instr[1]:
+                    if isinstance(argument, str) and argument.startswith("%"):
+                        new_arguments.append(uf.find(argument))
+                    else:
+                        new_arguments.append(argument)
+                if instr[1] != new_arguments:
+                    is_changed = True
+                self.cfg.cfg[block_label].cjumps[len(block.cjumps) - 1 - index] = (
+                    instr[0],
+                    new_arguments,
+                )
+
+            if block.jump:
+                if block.jump[0] == "ret":
+                    variable = block.jump[1]
+                    if isinstance(variable, str) and variable.startswith("%"):
+                        if uf.find(variable) != variable:
+                            is_changed = True
+                        self.cfg.cfg[block_label].jump = ("ret", uf.find(variable))
+                    else:
+                        self.cfg.cfg[block_label].jump = ("ret", variable)
+
+            for variable, phi_function in block.phi_functions.items():
+                new_phi_functions = []
+                for block_label2, variable2 in phi_function:
+                    if isinstance(variable2, str) and variable2.startswith("%"):
+                        new_phi_functions.append((block_label2, uf.find(variable2)))
+                    else:
+                        new_phi_functions.append((block_label2, variable2))
+                if phi_function != new_phi_functions:
+                    is_changed = True
+                self.cfg.cfg[block_label].phi_functions[variable] = new_phi_functions
+
+        return is_changed
 
     def _get_new_variable(self, variable: str):
         self.version_counter += 1
