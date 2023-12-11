@@ -1,0 +1,20 @@
+def fib(x:int):int {
+  var count = 20 : int;
+  count = x;
+  var x = 0 : int;
+  var y = 1 : int;
+  var z = 0 : int;
+  while (count > 0) {
+    count = count - 1;
+    z = x + y;
+    x = y;
+    y = z;
+  }
+  return x;
+}
+
+def main() {
+  var r = 0:int;
+  r = fib(50);
+  print(r);
+}

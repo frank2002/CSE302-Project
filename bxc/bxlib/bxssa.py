@@ -6,16 +6,20 @@ from .union_find import UnionFind
 
 
 class SSA:
-    def __init__(self, cfg):
+    def __init__(self, cfg, name: str = None, arguments: list[str] = None):
         self.cfg = cfg
         self.ssa = None
         self.all_instructions = []
         self.instr_dict = {}
         self.version_counter = 0
+        self.name = name
+        self.arguments = arguments
 
     def transform(self):
         self._add_phi_functions()
         self._update_phi_functions()
+
+        print(f"before elimination, {self.cfg.cfg}")
 
         is_changed = True
         while is_changed:
@@ -23,10 +27,38 @@ class SSA:
 
             changed1 = self.null_choice_elimination()
             changed2 = self.rename_elimination()
+            # print(f"after, {self.cfg.cfg}\n\n\n\n")
 
             is_changed = changed1 or changed2
 
         self.ssa = self.cfg
+        return self.ssa
+
+    def destruct(self) -> CFG:
+        if not self.ssa:
+            raise Exception("SSA has not been built yet")
+
+        # Adding COPY instructions to end of blocks
+
+        cfg = copy.deepcopy(self.ssa)
+
+        for block_label, block in cfg.cfg.items():
+            for variable, phi_functions in block.phi_functions.items():
+                for phi_function in phi_functions:
+                    if phi_function[0] == "@":
+                        variable2 = phi_function.split(".")[1]
+                        self.ssa.cfg[block_label].body.insert(
+                            0, TAC("copy", [variable2], variable)
+                        )
+                        continue
+
+                    block_label2, variable2 = phi_function
+
+                    self.ssa.cfg[block_label2].body.append(
+                        TAC("copy", [variable2], variable)
+                    )
+                self.ssa.cfg[block_label].phi_functions.pop(variable)
+
         return self.ssa
 
     def null_choice_elimination(self) -> bool:
@@ -35,6 +67,9 @@ class SSA:
             phi_functions = block.phi_functions
             new_phi_functions = phi_functions.copy()
             for variable, phi_function in phi_functions.items():
+                # print(f"phi_function: {phi_function}")
+                if len(phi_function) == 1 and phi_function[0][0] == "@":
+                    continue
                 version = variable.split(".")[1]
                 is_same = True
                 for block_label2, variable2 in phi_function:
@@ -45,7 +80,7 @@ class SSA:
                 if is_same:
                     new_phi_functions.pop(variable)
                     is_changed = True
-
+                    # print(f"eliminate: {variable} : {phi_function}")
             self.cfg.cfg[block_label].phi_functions = new_phi_functions
 
         return is_changed
@@ -57,10 +92,18 @@ class SSA:
         for block_label, block in self.cfg.cfg.items():
             new_phi_functions = block.phi_functions.copy()
             for variable, phi_function in block.phi_functions.items():
+                if len(phi_function) == 1 and phi_function[0][0] == "@":
+                    continue
                 v = None
                 is_qualified = True
                 if len(phi_function) == 1:
-                    uf.union(phi_function[0][1], variable)
+                    # print(
+                    #     f" Union {phi_function[0][0]} {phi_function[0][1]} {(block_label, variable)}"
+                    # )
+                    uf.union(
+                        (phi_function[0][0], phi_function[0][1]),
+                        (block_label, variable),
+                    )
                     is_changed = True
                     new_phi_functions.pop(variable)
                 else:
@@ -74,7 +117,7 @@ class SSA:
                                 is_qualified = False
                                 break
                     if is_qualified:
-                        uf.union(v, variable)
+                        uf.union((block_label2, v), (block_label, variable))
                         new_phi_functions.pop(variable)
                         is_changed = True
 
@@ -85,7 +128,7 @@ class SSA:
                 new_arguments = []
                 for argument in instr.arguments:
                     if isinstance(argument, str) and argument.startswith("%"):
-                        new_arguments.append(uf.find(argument))
+                        new_arguments.append(uf.find((block_label, argument))[1])
                     else:
                         new_arguments.append(argument)
                 if instr.arguments != new_arguments:
@@ -97,7 +140,7 @@ class SSA:
                 new_arguments = []
                 for argument in instr[1]:
                     if isinstance(argument, str) and argument.startswith("%"):
-                        new_arguments.append(uf.find(argument))
+                        new_arguments.append(uf.find((block_label, argument))[1])
                     else:
                         new_arguments.append(argument)
                 if instr[1] != new_arguments:
@@ -108,24 +151,34 @@ class SSA:
                 )
 
             if block.jump:
-                if block.jump[0] == "ret":
-                    variable = block.jump[1]
+                if block.jump[0] == "ret" and block.jump[1] and len(block.jump[1]) == 1:
+                    variable = block.jump[1][0]
                     if isinstance(variable, str) and variable.startswith("%"):
-                        if uf.find(variable) != variable:
+                        print(
+                            f"find {(block_label, variable)} -> {uf.find((block_label, variable))}"
+                        )
+                        if uf.find((block_label, variable)) != (block_label, variable):
                             is_changed = True
-                        self.cfg.cfg[block_label].jump = ("ret", uf.find(variable))
+                        self.cfg.cfg[block_label].jump = (
+                            "ret",
+                            [uf.find((block_label, variable))[1]],
+                        )
                     else:
-                        self.cfg.cfg[block_label].jump = ("ret", variable)
+                        self.cfg.cfg[block_label].jump = ("ret", [variable])
 
             for variable, phi_function in block.phi_functions.items():
                 new_phi_functions = []
+                if len(phi_function) == 1 and phi_function[0][0] == "@":
+                    continue
                 for block_label2, variable2 in phi_function:
                     if isinstance(variable2, str) and variable2.startswith("%"):
-                        new_phi_functions.append((block_label2, uf.find(variable2)))
+                        # print(f"find {variable2} -> {uf.find(variable2)}")
+                        new_phi_functions.append(uf.find((block_label2, variable2)))
                     else:
                         new_phi_functions.append((block_label2, variable2))
                 if phi_function != new_phi_functions:
                     is_changed = True
+                    # print(f"Change: {variable} : {phi_function} -> {new_phi_functions}")
                 self.cfg.cfg[block_label].phi_functions[variable] = new_phi_functions
 
         return is_changed
@@ -138,6 +191,7 @@ class SSA:
         # livein analysis
 
         block_liveness = self._liveness_analysis()
+        print(f"block_liveness: {block_liveness}")
 
         # initialize phi functions
         for block_label, block in self.cfg.cfg.items():
@@ -208,13 +262,16 @@ class SSA:
                 )
 
             if block.jump:
-                if block.jump[0] == "ret":
+                if block.jump[0] == "ret" and block.jump[1] and len(block.jump[1]) == 1:
                     is_found = False
-                    variable = block.jump[1]
+                    variable = block.jump[1][0]
                     if isinstance(variable, str) and variable.startswith("%"):
                         for index2, instr2 in enumerate(reversed(block.body)):
                             if variable == instr2.result.split(".")[0]:
-                                self.cfg.cfg[block_label].jump = ("ret", instr2.result)
+                                self.cfg.cfg[block_label].jump = (
+                                    "ret",
+                                    [instr2.result],
+                                )
 
                                 is_found = True
                                 break
@@ -223,15 +280,23 @@ class SSA:
                                 if variable == key.split(".")[0]:
                                     self.cfg.cfg[block_label].jump = (
                                         "ret",
-                                        key,
+                                        [key],
                                     )
                                     break
                     else:
-                        self.cfg.cfg[block_label].jump = ("ret", instr2.result)
+                        self.cfg.cfg[block_label].jump = ("ret", [instr2.result])
 
     def _update_phi_functions(self):
         for block_label, block in self.cfg.cfg.items():
             predecessor_blocks = self._get_predecessor_blocks(block_label)
+
+            if not predecessor_blocks:
+                for variable, phi_functions in block.phi_functions.items():
+                    # print(f"@{self.name}.{variable}")
+
+                    self.cfg.cfg[block_label].phi_functions[variable].append(
+                        f"@{self.name}.{variable.split('.')[0]}"
+                    )
 
             for variable, phi_functions in block.phi_functions.items():
                 for predecessor_block in predecessor_blocks:
@@ -296,8 +361,8 @@ class SSA:
 
             if block.jump:
                 index = (block_label, line_counter)
-                if block.jump[0] == "ret":
-                    livein[index] = set([block.jump[1]])
+                if block.jump[0] == "ret" and block.jump[1] and len(block.jump[1]) == 1:
+                    livein[index] = set([block.jump[1][0]])
                 else:
                     livein[index] = set()
                 all_instructions.append(index)
@@ -350,7 +415,11 @@ class SSA:
                 next_label = current_block.jump[1]
                 successors.append((next_label, 0))
 
-            elif current_block.jump[0] == "ret":
+            elif (
+                current_block.jump[0] == "ret"
+                and current_block.jump[1]
+                and len(current_block.jump[1]) == 1
+            ):
                 pass
         elif instr_index > len(current_block.body) - 1 and instr_index < last_index(
             all_instructions, block_label
@@ -425,4 +494,5 @@ if __name__ == "__main__":
     )
 
     ssa = SSA(fib_cfg)
-    print(ssa.transform().cfg)
+    print(ssa._liveness_analysis())
+    # print(ssa.transform().cfg)

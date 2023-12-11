@@ -7,32 +7,33 @@ from typing import Optional as Opt
 # Three-Address Code
 
 OPCODES = {
-    'opposite'            : 'neg',
-    'addition'            : 'add',
-    'subtraction'         : 'sub',
-    'multiplication'      : 'mul',
-    'division'            : 'div',
-    'modulus'             : 'mod',
-    'bitwise-negation'    : 'not',
-    'bitwise-and'         : 'and',
-    'bitwise-or'          :  'or',
-    'bitwise-xor'         : 'xor',
-    'logical-left-shift'  : 'shl',
-    'logical-right-shift' : 'shr',
+    "opposite": "neg",
+    "addition": "add",
+    "subtraction": "sub",
+    "multiplication": "mul",
+    "division": "div",
+    "modulus": "mod",
+    "bitwise-negation": "not",
+    "bitwise-and": "and",
+    "bitwise-or": "or",
+    "bitwise-xor": "xor",
+    "logical-left-shift": "shl",
+    "logical-right-shift": "shr",
 }
+
 
 # --------------------------------------------------------------------
 @dc.dataclass
 class TAC:
-    opcode    : str
-    arguments : list[str | int]
-    result    : Opt[str | int] = None
+    opcode: str
+    arguments: list[str | int]
+    result: Opt[str | int] = None
 
     def tojson(self):
         return dict(
-            opcode = self.opcode   ,
-            args   = self.arguments,
-            result = self.result   ,
+            opcode=self.opcode,
+            args=self.arguments,
+            result=self.result,
         )
 
     def __repr__(self):
@@ -43,14 +44,18 @@ class TAC:
             aout = f"{self.result} = {aout}"
         return aout
 
+
 # --------------------------------------------------------------------
 class TACProc:
-    __match_args__ = ('name', 'arguments', 'tac')
+    __match_args__ = ("name", "arguments", "tac", "stack_size", "alloc", "is_alloc")
 
     def __init__(self, name: str, arguments: list[str]):
-        self.name      = name
+        self.name = name
         self.arguments = arguments
-        self.tac       = []
+        self.stack_size = 0
+        self.alloc = {}
+        self.tac = []
+        self.is_alloc = False
 
     def __repr__(self):
         aout = f"proc @{self.name}"
@@ -61,12 +66,13 @@ class TACProc:
             aout.append(f"    {tac};")
         return "\n".join(aout) + "\n"
 
+
 # --------------------------------------------------------------------
 class TACVar:
-    __match_args__ = ('name', 'value')
+    __match_args__ = ("name", "value")
 
     def __init__(self, name: str, value: int):
-        self.name  = name
+        self.name = name
         self.value = value
 
     def __repr__(self):

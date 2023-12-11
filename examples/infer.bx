@@ -1,0 +1,38 @@
+def foo(x:int, y:int):int {
+  var a = 0 : int;
+  var b = 0 : int;
+  var c = 0 : int;
+  var d = 0 : int;
+  var e = 0 : int;
+  var f = 0 : int;
+  var g = 0 : int;
+  var h = 0 : int;
+  var i = 0 : int;
+  var j = 0 : int;
+  var k = 0 : int;
+  var l = 0 : int;
+  var m = 0 : int;
+  var n = 0 : int;
+  var o = 0 : int;
+  var p = 0 : int;
+  var q = 0 : int;
+  var r = 0 : int;
+  var s = 0 : int;
+  var t = 0 : int;
+  var u = 0 : int;
+  var v = 0 : int;
+  var w = 0 : int;
+  var x1 = 0 : int;
+  var y1 = 0 : int;
+  var z = 0 : int;
+
+  a = b + c + d + e + f + g + h + i + j + k + l + m + n + o + p + q + r + s + t + u + v + w + x1 + y1 + z;
+
+  return a;
+}
+
+def main() {
+  var r = 0:int;
+  r = foo(1, 2);
+  print(r);
+}
