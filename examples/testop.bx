@@ -17,7 +17,7 @@ def compute(x: int, y: int, z: int, b:bool): int {
     rightShift = x >> 2;
     notX = !b;
 
-    return quotient;
+    return leftShift;
 }
 
 def main() {

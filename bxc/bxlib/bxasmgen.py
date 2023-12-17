@@ -4,6 +4,26 @@ import abc
 from .bxtac import *
 
 
+REGISTER = (
+    "%rax",
+    "%rdi",
+    "%rsi",
+    "%rdx",
+    "%rcx",
+    "%r8",
+    "%r9",
+    "%r10",
+    "%rbx",
+    "%r12",
+    "%r13",
+    "%r14",
+    "%r15",
+    "%r11",
+    "%rbp",
+    "%rsp",
+)
+
+
 # --------------------------------------------------------------------
 class AsmGen(abc.ABC):
     BACKENDS = {}
@@ -118,8 +138,15 @@ class AsmGen_x64_Linux(AsmGen):
     def _emit_copy(self, src, dst):
         if dst == self.ret_temp:
             self.is_hold_ret = True
-        self._emit("movq", self._temp(src), "%r11")
-        self._emit("movq", "%r11", self._temp(dst))
+        src_reg = self._temp(src)
+        dst_reg = self._temp(dst)
+        if src_reg not in REGISTER and dst_reg not in REGISTER:
+            self._emit("movq", src_reg, "%r11")
+            self._emit("movq", "%r11", dst_reg)
+        elif src_reg == dst_reg:
+            pass
+        else:
+            self._emit("movq", src_reg, dst_reg)
 
     def _emit_alu1(self, opcode, src, dst):
         if dst == self.ret_temp:
@@ -141,9 +168,13 @@ class AsmGen_x64_Linux(AsmGen):
     def _emit_alu2(self, opcode, op1, op2, dst):
         if dst == self.ret_temp:
             self.is_hold_ret = True
-        self._emit("movq", self._temp(op1), "%r11")
-        self._emit(opcode, self._temp(op2), "%r11")
-        self._emit("movq", "%r11", self._temp(dst))
+        op1_reg = self._temp(op1)
+        if op1_reg in REGISTER and op1_reg == self._temp(dst):
+            self._emit(opcode, self._temp(op2), op1_reg)
+        else:
+            self._emit("movq", self._temp(op1), "%r11")
+            self._emit(opcode, self._temp(op2), "%r11")
+            self._emit("movq", "%r11", self._temp(dst))
 
     def _emit_add(self, op1, op2, dst):
         if dst == self.ret_temp:

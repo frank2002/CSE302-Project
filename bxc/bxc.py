@@ -14,7 +14,7 @@ from bxlib.bxerrors import Reporter, DefaultReporter
 from bxlib.bxparser import Parser
 from bxlib.bxmm import MM
 from bxlib.bxtychecker import check as tycheck
-from bxc.bxlib.bxasmgen2 import AsmGen
+from bxlib.bxasmgen import AsmGen
 from bxlib.bxtac import *
 from bxlib.bxcfg import tac2cfg, cfg2tac, uce, jthreading
 from bxlib.bxssa import SSA
