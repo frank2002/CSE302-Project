@@ -54,7 +54,7 @@ class AsmGen(abc.ABC):
             if temp in self._tparams:
                 return self._format_param(self._tparams[temp])
             index = self._temps.setdefault(temp, len(self._temps))
-            print(f"temp = {temp}, index = {index}")
+            # print(f"temp = {temp}, index = {index}")
             return self._format_temp(index)
         else:
             if temp.startswith("@"):
@@ -62,7 +62,7 @@ class AsmGen(abc.ABC):
             if temp in self._tparams:
                 return self._format_param(self._tparams[temp])
             index = self._temps.setdefault(temp, len(self._temps))
-            print(f"temp = {temp}, index = {index}")
+            # print(f"temp = {temp}, index = {index}")
             return self._format_temp_alloc(temp)
 
     @abc.abstractmethod
@@ -83,7 +83,7 @@ class AsmGen(abc.ABC):
 
         if instr.result is not None:
             args.append(instr.result)
-        print(f"args = {args}")
+        # print(f"args = {args}")
         getattr(self, f"_emit_{opcode}")(*args)
 
     def _get_asm(self, opcode, *args):
@@ -117,14 +117,14 @@ class AsmGen_x64_Linux(AsmGen):
     def _format_temp(self, index):
         if isinstance(index, str):
             return f"{index}(%rip)"
-        print(f"alloc = {self.alloc}")
+        # print(f"alloc = {self.alloc}")
         return f"-{8*(index+1)}(%rbp)"
 
     def _format_temp_alloc(self, temp):
         record = self.alloc[temp]
         if isinstance(record, int):
             return f"{(record-8)}(%rbp)"
-        print(f"alloc = {self.alloc}")
+        # print(f"alloc = {self.alloc}")
         return f"{record[1:]}"
 
     def _format_param(self, index):
@@ -360,7 +360,7 @@ class AsmGen_x64_Linux(AsmGen):
                 for instr in ptac:
                     if isinstance(instr, TAC) and instr.opcode == "ret":
                         emitter.ret_temp = instr.arguments[0]
-                print(f"ret_temp = {emitter.ret_temp}")
+                # print(f"ret_temp = {emitter.ret_temp}")
 
                 for i in range(min(6, len(arguments))):
                     emitter._emit(

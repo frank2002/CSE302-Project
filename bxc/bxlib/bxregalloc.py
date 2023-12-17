@@ -69,9 +69,9 @@ class InterferenceGraph:
 
     def build(self, cfg, var_ignore=None):
         livein, liveout, all_instructions, instr_dict = liveness_analysis(cfg)
-        dict_print(livein, "livein")
-        dict_print(liveout, "liveout")
-        dict_print(instr_dict, "instr_dict")
+        # dict_print(livein, "livein")
+        # dict_print(liveout, "liveout")
+        # dict_print(instr_dict, "instr_dict")
         # get all variables from cfg
 
         variables = set()
@@ -92,7 +92,7 @@ class InterferenceGraph:
 
         for instr in all_instructions:
             if isinstance(instr_dict[instr], TAC):
-                print(instr_dict[instr])
+                # print(instr_dict[instr])
                 if instr_dict[instr].opcode == "copy":
                     for var1 in liveout[instr]:
                         if var_ignore and var1 in var_ignore:
@@ -115,7 +115,7 @@ class InterferenceGraph:
                             if var1 != var2:
                                 self.add_edge(var1, var2)
             elif isinstance(instr_dict[instr], tuple):
-                print(instr_dict[instr])
+                # print(instr_dict[instr])
                 if instr_dict[instr][0] == "ret":
                     self.ret = instr_dict[instr][1][0]
                 for var1 in liveout[instr]:
@@ -127,7 +127,7 @@ class InterferenceGraph:
                     for var2 in var2s:
                         if var1 != var2:
                             self.add_edge(var1, var2)
-        dict_print(self.graph, "graph")
+        # dict_print(self.graph, "graph")
         return variables
 
     def max_cardinality_search(self) -> list:
@@ -189,9 +189,9 @@ class InterferenceGraph:
                     for reg in interference_graph[node]
                     if reg in reserved_register_colors
                 )
-                print(f"node {node}")
-                print(f"interference: {interference_graph[node]}")
-                print(f"restricted: {restricted_colors}")
+                # print(f"node {node}")
+                # print(f"interference: {interference_graph[node]}")
+                # print(f"restricted: {restricted_colors}")
                 # Find the smallest color not used by neighbors
                 color = 1
                 while color in used_colors or color in restricted_colors:
@@ -203,7 +203,7 @@ class InterferenceGraph:
                 for neighbor in interference_graph[node]:
                     if coloring[neighbor] == coloring[node]:
                         coloring[neighbor] = coloring[node]
-        print(f"coloring: {coloring}")
+        # print(f"coloring: {coloring}")
         return coloring
 
     def scan_precolored(self, cfg: CFG) -> dict:
@@ -325,7 +325,7 @@ def liveness_analysis(cfg: CFG):
             all_instructions.append(index)
             instr_dict[index] = block.jump
 
-    dict_print(livein, "livein_init")
+    # dict_print(livein, "livein_init")
 
     # print(all_instructions)
     # dict_print(instr_dict, "instr_dict")
@@ -541,69 +541,3 @@ def reverse_dict(dict: dict) -> dict:
     for key, value in dict.items():
         dic.setdefault(value, []).append(key)
     return dic
-
-
-if __name__ == "__main__":
-    # Create the CFGNode for L0
-    cfg_node0 = CFGNode()
-    cfg_node0.label = "L0"
-    cfg_node0.body = [
-        TAC("const", [0], "%0"),
-        TAC("const", [1], "%1"),
-        TAC("const", [1], "%2"),
-    ]
-    cfg_node0.jump = ("jmp", "L1")
-    cfg_node0.cjumps = []
-
-    # Create the CFGNode for L1
-    cfg_node1 = CFGNode()
-    cfg_node1.label = "L1"
-    cfg_node1.body = []
-    cfg_node1.jump = ("jmp", "L2")
-    cfg_node1.cjumps = [("jz", ["%n", "L3"])]
-
-    # Create the CFGNode for L2
-    cfg_node2 = CFGNode()
-    cfg_node2.label = "L2"
-    cfg_node2.body = [
-        TAC("sub", ["%n", "%2"], "%n"),
-        TAC("add", ["%0", "%1"], "%3"),
-        TAC("copy", ["%1"], "%0"),
-        TAC("copy", ["%3"], "%1"),
-    ]
-    cfg_node2.jump = ("jmp", "L1")
-    cfg_node2.cjumps = []
-
-    # Create the CFGNode for L3
-    cfg_node3 = CFGNode()
-    cfg_node3.label = "L3"
-    cfg_node3.body = []
-    cfg_node3.jump = ("ret", ["%0"])
-    cfg_node3.cjumps = []
-
-    # Create the CFG with all nodes
-    fib_cfg = CFG(
-        "L0", {"L0": cfg_node0, "L1": cfg_node1, "L2": cfg_node2, "L3": cfg_node3}
-    )
-
-    ssa = SSA(fib_cfg)
-    ssa.transform()
-
-    livein, liveout, all_instructions, instr_dict = liveness_analysis(ssa.ssa)
-
-    sorted_livein = dict(
-        sorted(livein.items(), key=lambda item: (item[0][0], item[0][1]))
-    )
-    sorted_liveout = dict(
-        sorted(liveout.items(), key=lambda item: (item[0][0], item[0][1]))
-    )
-
-    # print("livein")
-    # dict_print(sorted_livein)
-    # print("liveout")
-    # dict_print(sorted_liveout)
-
-    graph = InterferenceGraph()
-    graph.build(ssa.ssa)
-    print(graph)
-    print(graph.max_cardinality_search())
