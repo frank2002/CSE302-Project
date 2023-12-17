@@ -1,0 +1,32 @@
+def compute(x: int, y: int, z: int, b:bool): int {
+    var sum = 0 : int;
+    var diff = 0 : int;
+    var prod = 0 : int;
+    var quotient = 0 : int;
+    var remainder = 0 : int;
+    var leftShift = 0 : int;
+    var rightShift = 0 : int;
+    var notX = true : bool;
+
+    sum = x + y + z;
+    diff = x - y - z;
+    prod = x * y * z;
+    quotient = x / y / z;
+    remainder = x % y % z;
+    leftShift = x << 2;
+    rightShift = x >> 2;
+    notX = !b;
+
+    return quotient;
+}
+
+def main() {
+    var x = 15 : int;
+    var y = 3 : int;
+    var z = 2 : int;
+    var b = true : bool;
+    var result = 0 : int;
+
+    result = compute(x, y, z, b);
+    print(result);
+}

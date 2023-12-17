@@ -1,13 +1,13 @@
 def foo(x:int, y:int):int {
-  var a = 0 : int;
-  var b = 0 : int;
-  var c = 0 : int;
-  var d = 0 : int;
-  var e = 0 : int;
-  var f = 0 : int;
-  var g = 0 : int;
-  var h = 0 : int;
-  var i = 0 : int;
+  var a = 1 : int;
+  var b = 1 : int;
+  var c = 1 : int;
+  var d = 1 : int;
+  var e = 1 : int;
+  var f = 1 : int;
+  var g = 1 : int;
+  var h = 1 : int;
+  var i = 1 : int;
   var j = 0 : int;
   var k = 0 : int;
   var l = 0 : int;

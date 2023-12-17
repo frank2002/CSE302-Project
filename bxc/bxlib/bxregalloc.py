@@ -10,10 +10,10 @@ CONDITIONAL_JUMP_OPCODES = ["jz", "jnz", "jlt", "jle", "jgt", "jge"]
 
 REGISTER_MAP = (
     "%%rax",
-    "%%rcx",
-    "%%rdx",
-    "%%rsi",
     "%%rdi",
+    "%%rsi",
+    "%%rdx",
+    "%%rcx",
     "%%r8",
     "%%r9",
     "%%r10",
@@ -26,6 +26,7 @@ REGISTER_MAP = (
     "%%rbp",
     "%%rsp",
 )
+
 
 REGISTER_PREORDERED = ("%%rax", "%%rdi", "%%rsi", "%%rdx", "%%rcx", "%%r8", "%%r9")
 
@@ -68,6 +69,9 @@ class InterferenceGraph:
 
     def build(self, cfg, var_ignore=None):
         livein, liveout, all_instructions, instr_dict = liveness_analysis(cfg)
+        dict_print(livein, "livein")
+        dict_print(liveout, "liveout")
+        dict_print(instr_dict, "instr_dict")
         # get all variables from cfg
 
         variables = set()
@@ -83,8 +87,12 @@ class InterferenceGraph:
                 continue
             self.add_node(var)
 
+        for node in ["%%rax", "%%rcx", "%%rdx"]:
+            self.add_node(node)
+
         for instr in all_instructions:
             if isinstance(instr_dict[instr], TAC):
+                print(instr_dict[instr])
                 if instr_dict[instr].opcode == "copy":
                     for var1 in liveout[instr]:
                         if var_ignore and var1 in var_ignore:
@@ -107,6 +115,7 @@ class InterferenceGraph:
                             if var1 != var2:
                                 self.add_edge(var1, var2)
             elif isinstance(instr_dict[instr], tuple):
+                print(instr_dict[instr])
                 if instr_dict[instr][0] == "ret":
                     self.ret = instr_dict[instr][1][0]
                 for var1 in liveout[instr]:
@@ -118,6 +127,7 @@ class InterferenceGraph:
                     for var2 in var2s:
                         if var1 != var2:
                             self.add_edge(var1, var2)
+        dict_print(self.graph, "graph")
         return variables
 
     def max_cardinality_search(self) -> list:
@@ -141,7 +151,7 @@ class InterferenceGraph:
             W.remove(v_i)
         return seo
 
-    def greedy_coloring(self, seo):
+    def greedy_coloring(self, seo, precolored=None):
         interference_graph = self.graph
 
         reserved_register_colors = {
@@ -154,29 +164,37 @@ class InterferenceGraph:
             "%%r9": 7,
         }
 
-        precolored = {"input": self.arguments, "output": [self.ret]}
+        # precolored = {"input": self.arguments, "output": [self.ret]}
+
         # Initialize coloring with precolored nodes based on reserved registers
         coloring = {node: 0 for node in interference_graph}
 
-        # Assign precolored input temporaries to their corresponding registers
-        for index, var in enumerate(precolored["input"]):
-            coloring[var] = index + 2
-
-        # Assign precolored output temporary to the "%%rax" register
-        for var in precolored["output"]:
-            coloring[var] = 1
+        for node in precolored:
+            coloring[node] = precolored[node]
 
         # Iterate through nodes in the order given by the SEO
         for node in seo:
-            if node in precolored["input"] or node in precolored["output"]:
+            if node.startswith("%%"):
+                continue
+            if node in precolored.keys():
                 continue
             if coloring[node] == 0:  # Only color uncolored nodes
                 used_colors = set(
-                    coloring[neighbor] for neighbor in interference_graph[node]
+                    coloring[neighbor]
+                    for neighbor in interference_graph[node]
+                    if neighbor not in reserved_register_colors
                 )
+                restricted_colors = set(
+                    reserved_register_colors[reg]
+                    for reg in interference_graph[node]
+                    if reg in reserved_register_colors
+                )
+                print(f"node {node}")
+                print(f"interference: {interference_graph[node]}")
+                print(f"restricted: {restricted_colors}")
                 # Find the smallest color not used by neighbors
                 color = 1
-                while color in used_colors:
+                while color in used_colors or color in restricted_colors:
                     color += 1
                 # Assign the color to the current node
                 coloring[node] = color
@@ -185,8 +203,18 @@ class InterferenceGraph:
                 for neighbor in interference_graph[node]:
                     if coloring[neighbor] == coloring[node]:
                         coloring[neighbor] = coloring[node]
-
+        print(f"coloring: {coloring}")
         return coloring
+
+    def scan_precolored(self, cfg: CFG) -> dict:
+        # precolored = {"input": self.arguments, "output": [self.ret]}
+        precolored = {}
+        precolored[self.ret] = 1
+
+        for index, arg in enumerate(self.arguments):
+            precolored[arg] = index + 2
+
+        return precolored
 
     def __str__(self):
         return str(self.graph)
@@ -211,21 +239,27 @@ def allocation(ssa, name, arguments):
     def reg_2_col(reg):
         return reg_map[reg] + 1
 
-    color_map = graph.greedy_coloring(seo)
+    precolored = graph.scan_precolored(ssa)
+
+    color_map = graph.greedy_coloring(seo, precolored)
     num_color = len(reverse_dict(color_map))
     var_ignore = set()
     while num_color > 13:
         # we randomly pick here (not optimal)
 
         for var in variable_used:
-            if var not in graph.arguments and var not in graph.ret:
+            if (
+                var not in graph.arguments
+                and var not in graph.ret
+                and var not in precolored
+            ):
                 var_ignore.add(var)
                 break
 
         graph = InterferenceGraph(name, arguments)
         variable_used = graph.build(ssa, var_ignore)
         seo = graph.max_cardinality_search()
-        color_map = graph.greedy_coloring(seo)
+        color_map = graph.greedy_coloring(seo, precolored)
 
         num_color = len(reverse_dict(color_map))
 
@@ -284,12 +318,14 @@ def liveness_analysis(cfg: CFG):
 
         if block.jump:
             index = (block_label, line_counter)
-            if block.jump[0] == "ret" and block.jump[1] and len(block.jump[1]) == 0:
+            if block.jump[0] == "ret" and block.jump[1] and len(block.jump[1]) == 1:
                 livein[index] = set([block.jump[1][0]])
             else:
                 livein[index] = set()
             all_instructions.append(index)
             instr_dict[index] = block.jump
+
+    dict_print(livein, "livein_init")
 
     # print(all_instructions)
     # dict_print(instr_dict, "instr_dict")
@@ -367,7 +403,24 @@ def get_successors(cfg, instruction_index, instr_dict, all_instructions):
 
 def _get_use(instr):
     # Assuming 'instr' is a TAC object and arguments are a list of used variables
-    if isinstance(instr, TAC) and instr.opcode == "phi":
+    if isinstance(instr, TAC) and (instr.opcode == "div" or instr.opcode == "mod"):
+        args = set(
+            arg
+            for arg in instr.arguments
+            if isinstance(arg, str) and arg.startswith("%")
+        )
+        args.add("%%rax")
+        args.add("%%rdx")
+        return args
+    elif isinstance(instr, TAC) and (instr.opcode == "shl" or instr.opcode == "shr"):
+        args = set(
+            arg
+            for arg in instr.arguments
+            if isinstance(arg, str) and arg.startswith("%")
+        )
+        args.add("%%rcx")
+        return args
+    elif isinstance(instr, TAC) and instr.opcode == "phi":
         return set([arg[1] for arg in instr.arguments if isinstance(arg, tuple)])
     else:
         return set(
@@ -379,7 +432,11 @@ def _get_use(instr):
 
 def _get_def(instr):
     # Assuming 'instr' is a TAC object and result is the defined variable
-    if (
+    if isinstance(instr, TAC) and (instr.opcode == "div" or instr.opcode == "mod"):
+        return set([instr.result, "%%rax", "%%rdx"])
+    elif isinstance(instr, TAC) and (instr.opcode == "shl" or instr.opcode == "shr"):
+        return set([instr.result, "%%rcx"])
+    elif (
         isinstance(instr, TAC)
         and instr.result
         and isinstance(instr.result, str)
@@ -432,7 +489,7 @@ def get_block_variables(block: CFGNode) -> set:
         if (
             block.jump[0] == "ret"
             and block.jump[1]
-            and len(block.jump[1]) == 0
+            and len(block.jump[1]) == 1
             and isinstance(block.jump[1][0], str)
             and block.jump[0][1].startswith("%")
         ):
@@ -463,7 +520,7 @@ def get_all_variables(cfg: CFG) -> set:
             if (
                 block.jump[0] == "ret"
                 and block.jump[1]
-                and len(block.jump[1]) == 0
+                and len(block.jump[1]) == 1
                 and isinstance(block.jump[1][0], str)
             ):
                 variables.add(block.jump[1][0])

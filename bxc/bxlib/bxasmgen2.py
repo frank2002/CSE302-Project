@@ -12,38 +12,14 @@ class AsmGen(abc.ABC):
         self._tparams = dict()
         self._temps = dict()
         self._asm = []
-        self.alloc = {}
-        self.use_alloc = False
-        self.ret_temp = None
-        self.ret_index = None
-        self.is_hold_ret = False
-
-    # def _temp(self, temp):
-    #     if temp.startswith("@"):
-    #         return self._format_temp(temp[1:])
-    #     if temp in self._tparams:
-    #         return self._format_param(self._tparams[temp])
-    #     index = self._temps.setdefault(temp, len(self._temps))
-    #     print(f"temp = {temp}, index = {index}")
-    #     return self._format_temp(index)
 
     def _temp(self, temp):
-        if not self.use_alloc:
-            if temp.startswith("@"):
-                return self._format_temp(temp[1:])
-            if temp in self._tparams:
-                return self._format_param(self._tparams[temp])
-            index = self._temps.setdefault(temp, len(self._temps))
-            print(f"temp = {temp}, index = {index}")
-            return self._format_temp(index)
-        else:
-            if temp.startswith("@"):
-                return self._format_temp(temp[1:])
-            if temp in self._tparams:
-                return self._format_param(self._tparams[temp])
-            index = self._temps.setdefault(temp, len(self._temps))
-            print(f"temp = {temp}, index = {index}")
-            return self._format_temp_alloc(temp)
+        if temp.startswith("@"):
+            return self._format_temp(temp[1:])
+        if temp in self._tparams:
+            return self._format_param(self._tparams[temp])
+        index = self._temps.setdefault(temp, len(self._temps))
+        return self._format_temp(index)
 
     @abc.abstractmethod
     def _format_temp(self, index):
@@ -63,7 +39,7 @@ class AsmGen(abc.ABC):
 
         if instr.result is not None:
             args.append(instr.result)
-        print(f"args = {args}")
+
         getattr(self, f"_emit_{opcode}")(*args)
 
     def _get_asm(self, opcode, *args):
@@ -97,152 +73,77 @@ class AsmGen_x64_Linux(AsmGen):
     def _format_temp(self, index):
         if isinstance(index, str):
             return f"{index}(%rip)"
-        print(f"alloc = {self.alloc}")
         return f"-{8*(index+1)}(%rbp)"
-
-    def _format_temp_alloc(self, temp):
-        record = self.alloc[temp]
-        if isinstance(record, int):
-            return f"{(record-8)}(%rbp)"
-        print(f"alloc = {self.alloc}")
-        return f"{record[1:]}"
 
     def _format_param(self, index):
         return f"{8*(index+2)}(%rbp)"
 
     def _emit_const(self, ctt, dst):
-        if dst == self.ret_temp:
-            self.is_hold_ret = True
         self._emit("movq", f"${ctt}", self._temp(dst))
 
     def _emit_copy(self, src, dst):
-        if dst == self.ret_temp:
-            self.is_hold_ret = True
         self._emit("movq", self._temp(src), "%r11")
         self._emit("movq", "%r11", self._temp(dst))
 
     def _emit_alu1(self, opcode, src, dst):
-        if dst == self.ret_temp:
-            self.is_hold_ret = True
         self._emit("movq", self._temp(src), "%r11")
         self._emit(opcode, "%r11")
         self._emit("movq", "%r11", self._temp(dst))
 
     def _emit_neg(self, src, dst):
-        if dst == self.ret_temp:
-            self.is_hold_ret = True
         self._emit_alu1("negq", src, dst)
 
     def _emit_not(self, src, dst):
-        if dst == self.ret_temp:
-            self.is_hold_ret = True
         self._emit_alu1("notq", src, dst)
 
     def _emit_alu2(self, opcode, op1, op2, dst):
-        if dst == self.ret_temp:
-            self.is_hold_ret = True
         self._emit("movq", self._temp(op1), "%r11")
         self._emit(opcode, self._temp(op2), "%r11")
         self._emit("movq", "%r11", self._temp(dst))
 
     def _emit_add(self, op1, op2, dst):
-        if dst == self.ret_temp:
-            self.is_hold_ret = True
         self._emit_alu2("addq", op1, op2, dst)
 
     def _emit_sub(self, op1, op2, dst):
-        if dst == self.ret_temp:
-            self.is_hold_ret = True
         self._emit_alu2("subq", op1, op2, dst)
 
     def _emit_mul(self, op1, op2, dst):
-        if dst == self.ret_temp:
-            self.is_hold_ret = True
-        self._emit("movq", self._temp(op1), "%r11")  # Move first operand to r11
-        self._emit("imulq", self._temp(op2), "%r11")
-        self._emit("movq", "%r11", self._temp(dst))
+        self._emit("movq", self._temp(op1), "%rax")
+        self._emit("imulq", self._temp(op2))
+        self._emit("movq", "%rax", self._temp(dst))
 
     def _emit_div(self, op1, op2, dst):
-        is_pop = False
-        if self.is_hold_ret:
-            is_pop = True
-            self._emit("pushq", "%rax")  # Save rax to stack
-        elif dst == self.ret_temp:
-            self.is_hold_ret = True
-        self._emit("pushq", "%rdx")
         self._emit("movq", self._temp(op1), "%rax")
-        if self._temp(op2) == "%rdx":
-            self._emit("pushq", "%r11")
-            self._emit("movq", "%rdx", "%r11")
-            self._emit("cqto")
-            self._emit("idivq", "%r11")
-            self._emit("popq", "%r11")
-        else:
-            self._emit("cqto")
-            self._emit("idivq", self._temp(op2))
+        self._emit("cqto")
+        self._emit("idivq", self._temp(op2))
         self._emit("movq", "%rax", self._temp(dst))
-        self._emit("popq", "%rdx")
-        if is_pop:
-            self._emit("popq", "%rax")
 
     def _emit_mod(self, op1, op2, dst):
-        is_pop = False
-        if self.is_hold_ret:
-            is_pop = True
-            self._emit("pushq", "%rax")  # Save rax to stack
-        elif dst == self.ret_temp:
-            self.is_hold_ret = True
-
-        self._emit("pushq", "%rdx")
         self._emit("movq", self._temp(op1), "%rax")
-        if self._temp(op2) == "%rdx":
-            self._emit("pushq", "%r11")
-            self._emit("movq", "%rdx", "%r11")
-            self._emit("cqto")
-            self._emit("idivq", "%r11")
-            self._emit("popq", "%r11")
-        else:
-            self._emit("cqto")
-            self._emit("idivq", self._temp(op2))
+        self._emit("cqto")
+        self._emit("idivq", self._temp(op2))
         self._emit("movq", "%rdx", self._temp(dst))
-        self._emit("popq", "%rdx")
-        if is_pop:
-            self._emit("popq", "%rax")
 
     def _emit_and(self, op1, op2, dst):
-        if dst == self.ret_temp:
-            self.is_hold_ret = True
         self._emit_alu2("andq", op1, op2, dst)
 
     def _emit_or(self, op1, op2, dst):
-        if dst == self.ret_temp:
-            self.is_hold_ret = True
         self._emit_alu2("orq", op1, op2, dst)
 
     def _emit_xor(self, op1, op2, dst):
-        if dst == self.ret_temp:
-            self.is_hold_ret = True
         self._emit_alu2("xorq", op1, op2, dst)
 
     def _emit_shl(self, op1, op2, dst):
-        if dst == self.ret_temp:
-            self.is_hold_ret = True
-        self._emit("pushq", "%rcx")
         self._emit("movq", self._temp(op1), "%r11")
         self._emit("movq", self._temp(op2), "%rcx")
         self._emit("salq", "%cl", "%r11")
         self._emit("movq", "%r11", self._temp(dst))
-        self._emit("popq", "%rcx")
 
     def _emit_shr(self, op1, op2, dst):
-        if dst == self.ret_temp:
-            self.is_hold_ret = True
-        self._emit("pushq", "%rcx")
         self._emit("movq", self._temp(op1), "%r11")
         self._emit("movq", self._temp(op2), "%rcx")
         self._emit("sarq", "%cl", "%r11")
         self._emit("movq", "%r11", self._temp(dst))
-        self._emit("popq", "%rcx")
 
     def _emit_print(self, arg):
         self._emit("leaq", ".lprintfmt(%rip)", "%rdi")
@@ -321,15 +222,8 @@ class AsmGen_x64_Linux(AsmGen):
 
                 return emitter._asm
 
-            case TACProc(name, arguments, ptac, stack_size, alloc, is_alloc):
+            case TACProc(name, arguments, ptac):
                 emitter._endlbl = f".E_{name}"
-                emitter.alloc = alloc
-                emitter.use_alloc = is_alloc
-
-                for instr in ptac:
-                    if isinstance(instr, TAC) and instr.opcode == "ret":
-                        emitter.ret_temp = instr.arguments[0]
-                print(f"ret_temp = {emitter.ret_temp}")
 
                 for i in range(min(6, len(arguments))):
                     emitter._emit(
@@ -341,12 +235,9 @@ class AsmGen_x64_Linux(AsmGen):
 
                 for instr in ptac:
                     emitter(instr)
-                if is_alloc:
-                    nvars = stack_size // 8
-                    nvars += nvars & 1
-                else:
-                    nvars = len(emitter._temps)
-                    nvars += nvars & 1
+
+                nvars = len(emitter._temps)
+                nvars += nvars & 1
 
                 return (
                     [
@@ -355,7 +246,7 @@ class AsmGen_x64_Linux(AsmGen):
                         emitter._get_label(name),
                         emitter._get_asm("pushq", "%rbp"),
                         emitter._get_asm("movq", "%rsp", "%rbp"),
-                        emitter._get_asm("subq", f"${8*nvars + 8}", "%rsp"),
+                        emitter._get_asm("subq", f"${8*nvars}", "%rsp"),
                     ]
                     + emitter._asm
                     + [

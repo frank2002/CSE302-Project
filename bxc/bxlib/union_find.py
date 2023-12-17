@@ -39,3 +39,9 @@ class UnionFind:
         #     new_vars = [self.find(var) for var in vars]
         #     code[i] = (operation, *new_vars)
         pass
+
+
+if __name__ == "__main__":
+    uf = UnionFind()
+    uf.union(("L1", "%1"), "%2")
+    print(uf.find("%2"))

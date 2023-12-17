@@ -22,12 +22,11 @@ class SSA:
         print(f"before elimination, {self.cfg.cfg}")
 
         is_changed = True
-        uf = UnionFind()
         while is_changed:
             is_changed = False
 
             changed1 = self.null_choice_elimination()
-            changed2 = self.rename_elimination(uf)
+            changed2 = self.rename_elimination()
             # print(f"after, {self.cfg.cfg}\n\n\n\n")
 
             is_changed = changed1 or changed2
@@ -68,6 +67,7 @@ class SSA:
             phi_functions = block.phi_functions
             new_phi_functions = phi_functions.copy()
             for variable, phi_function in phi_functions.items():
+                # print(f"phi_function: {phi_function}")
                 if len(phi_function) == 1 and phi_function[0][0] == "@":
                     continue
                 version = variable.split(".")[1]
@@ -85,30 +85,24 @@ class SSA:
 
         return is_changed
 
-    def rename_elimination(self, uf) -> bool:
-        # uf = UnionFind()
+    def rename_elimination(self) -> bool:
+        uf = UnionFind()
         is_changed = False
 
         for block_label, block in self.cfg.cfg.items():
             new_phi_functions = block.phi_functions.copy()
             for variable, phi_function in block.phi_functions.items():
+                if len(phi_function) == 1 and phi_function[0][0] == "@":
+                    continue
                 v = None
                 is_qualified = True
-                if len(phi_function) == 1 and phi_function[0][0] == "@":
-                    new_variable = phi_function[0].split(".")[1]
-                    # print(f"new_variable: {(block_label, new_variable), variable}")
-                    uf.union((block_label, new_variable), variable)
-                    # print(f"new_phi_functions: {new_phi_functions}")
-                    new_phi_functions.pop(variable)
-                    is_changed = True
-
-                elif len(phi_function) == 1:
-                    # print(
-                    #     f" Union {phi_function[0][0]} {phi_function[0][1]} <- {variable}"
-                    # )
+                if len(phi_function) == 1:
+                    print(
+                        f" Union {phi_function[0][0]} {phi_function[0][1]} {(block_label, variable)}"
+                    )
                     uf.union(
                         (phi_function[0][0], phi_function[0][1]),
-                        variable,
+                        (block_label, variable),
                     )
                     is_changed = True
                     new_phi_functions.pop(variable)
@@ -123,8 +117,7 @@ class SSA:
                                 is_qualified = False
                                 break
                     if is_qualified:
-                        uf.union((block_label2, v), variable)
-                        # print(f" Union {block_label2} {v} <- {variable}")
+                        uf.union((block_label2, v), (block_label, variable))
                         new_phi_functions.pop(variable)
                         is_changed = True
 
@@ -132,41 +125,30 @@ class SSA:
 
         for block_label, block in self.cfg.cfg.items():
             for instr in block.body:
-                # print(f"instr: {instr}")
                 new_arguments = []
                 for argument in instr.arguments:
-                    # print(f"argument: {argument}")
                     if isinstance(argument, str) and argument.startswith("%"):
-                        temp = uf.find(argument)
-                        # print(f" find({ argument} -> {temp})")
-                        if len(temp) == 2 and isinstance(temp, tuple):
-                            new_arguments.append(uf.find(argument)[1])
-                        else:
-                            new_arguments.append(argument)
+                        new_arguments.append(uf.find((block_label, argument))[1])
                     else:
                         new_arguments.append(argument)
                 if instr.arguments != new_arguments:
                     is_changed = True
-
+                # print(f" find({(block_label, argument)}")
                 # print(f"old: {instr.arguments} -> new: {new_arguments}")
                 instr.arguments = new_arguments
 
-                # if isinstance(instr.result, str) and instr.result.startswith("%"):
-                #     tmp = uf.find(instr.result)[1]
+                if isinstance(instr.result, str) and instr.result.startswith("%"):
+                    tmp = uf.find((block_label, instr.result))[1]
 
-                #     if instr.result != tmp:
-                #         is_changed = True
-                #     instr.result = tmp
+                    if instr.result != tmp:
+                        is_changed = True
+                    instr.result = tmp
 
             for index, instr in enumerate(reversed(block.cjumps)):
                 new_arguments = []
                 for argument in instr[1]:
                     if isinstance(argument, str) and argument.startswith("%"):
-                        temp = uf.find(argument)
-                        if len(temp) == 2 and isinstance(temp, tuple):
-                            new_arguments.append(temp[1])
-                        else:
-                            new_arguments.append(argument)
+                        new_arguments.append(uf.find((block_label, argument))[1])
                     else:
                         new_arguments.append(argument)
                 if instr[1] != new_arguments:
@@ -180,36 +162,31 @@ class SSA:
                 if block.jump[0] == "ret" and block.jump[1] and len(block.jump[1]) == 1:
                     variable = block.jump[1][0]
                     if isinstance(variable, str) and variable.startswith("%"):
-                        # print(f"find {(block_label, variable)} -> {uf.find( variable)}")
-                        temp = uf.find(variable)
-                        if (
-                            len(temp) == 2
-                            and temp[1] != variable
-                            and isinstance(temp, tuple)
-                        ):
+                        print(
+                            f"find {(block_label, variable)} -> {uf.find((block_label, variable))}"
+                        )
+                        if uf.find((block_label, variable)) != (block_label, variable):
                             is_changed = True
-                            self.cfg.cfg[block_label].jump = (
-                                "ret",
-                                [temp[1]],
-                            )
-                        else:
-                            self.cfg.cfg[block_label].jump = ("ret", [variable])
+                        self.cfg.cfg[block_label].jump = (
+                            "ret",
+                            [uf.find((block_label, variable))[1]],
+                        )
                     else:
                         self.cfg.cfg[block_label].jump = ("ret", [variable])
 
-            # for variable, phi_function in block.phi_functions.copy().items():
-            #     print(f"phi_function: {variable}:{phi_function}")
-            #     if len(phi_function) == 1 and phi_function[0][0] == "@":
-            #         continue
-            #     if isinstance(variable, str) and variable.startswith("%"):
-            #         print(f"old var: {variable} -> {uf.find(variable)}")
-            #         new_variable = uf.find(variable)[1]
-            #         if variable != new_variable:
-            #             is_changed = True
-            #             self.cfg.cfg[block_label].phi_functions[
-            #                 new_variable
-            #             ] = phi_function
-            #             self.cfg.cfg[block_label].phi_functions.pop(variable)
+            for variable, phi_function in block.phi_functions.copy().items():
+                print(f"phi_function: {variable}:{phi_function}")
+                if len(phi_function) == 1 and phi_function[0][0] == "@":
+                    continue
+                if isinstance(variable, str) and variable.startswith("%"):
+                    print(f"old var: {variable} -> {uf.find((block_label, variable))}")
+                    new_variable = uf.find((block_label, variable))[1]
+                    if variable != new_variable:
+                        is_changed = True
+                        self.cfg.cfg[block_label].phi_functions[
+                            new_variable
+                        ] = phi_function
+                        self.cfg.cfg[block_label].phi_functions.pop(variable)
 
             for variable, phi_function in block.phi_functions.items():
                 new_phi_functions = []
@@ -218,11 +195,7 @@ class SSA:
                 for block_label2, variable2 in phi_function:
                     if isinstance(variable2, str) and variable2.startswith("%"):
                         # print(f"find {variable2} -> {uf.find(variable2)}")
-                        temp = uf.find(variable2)
-                        if len(temp) == 2 and isinstance(temp, tuple):
-                            new_phi_functions.append(uf.find(variable2))
-                        else:
-                            new_phi_functions.append((block_label2, variable2))
+                        new_phi_functions.append(uf.find((block_label2, variable2)))
                     else:
                         new_phi_functions.append((block_label2, variable2))
                 if phi_function != new_phi_functions:
@@ -240,7 +213,7 @@ class SSA:
         # livein analysis
 
         block_liveness = self._liveness_analysis()
-        # print(f"block_liveness: {block_liveness}")
+        print(f"block_liveness: {block_liveness}")
 
         # initialize phi functions
         for block_label, block in self.cfg.cfg.items():
@@ -373,11 +346,11 @@ class SSA:
         defined_variables = {}
         variable_prefix = variable.split(".")[0]
         for key, _ in block.phi_functions.items():
-            if key.startswith(variable_prefix + "."):
+            if key.startswith(variable_prefix):
                 defined_variables[variable] = key
 
         for instr in block.body:
-            if instr.result.startswith(variable_prefix + "."):
+            if instr.result.startswith(variable_prefix):
                 defined_variables[variable] = instr.result
 
         return defined_variables
