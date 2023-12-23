@@ -74,6 +74,9 @@ class InterferenceGraph:
         # dict_print(instr_dict, "instr_dict")
         # get all variables from cfg
 
+        # dict_print(livein, "livein")
+        # dict_print(liveout, "liveout")
+
         variables = set()
         for block_label, block in cfg.cfg.items():
             variables.update(get_block_variables(block))
@@ -82,8 +85,8 @@ class InterferenceGraph:
 
         variables = variables - var_ignore if var_ignore else variables
 
-        print(f"variables: {variables}")
-        print(f"var_ignore: {var_ignore}")
+        # print(f"variables: {variables}")
+        # print(f"var_ignore: {var_ignore}")
 
         for var in variables:
             if var_ignore and var in var_ignore:
@@ -346,20 +349,34 @@ def liveness_analysis(cfg: CFG):
             successors = get_successors(cfg, instr1, instr_dict, all_instructions)
 
             for instr2 in successors:
+                # print(f"instr1: {instr1}: {instr_dict[instr1]}")
+                # print(f"instr2: {instr2}: {instr_dict[instr2]}")
+
+                # print(f"livein1_before {instr1}: {livein[instr1]}")
+                # print(f"livein2_before {instr2}: {livein[instr2]}")
+
                 livein[instr1] = livein[instr1] | (
                     livein[instr2] - _get_def(instr_dict[instr1])
                 )
 
+                # print(f"get_def1 {_get_def(instr_dict[instr1])}")
+                # print(f"livein1_after {instr1}: {livein[instr1]}")
+
             if livein[instr1] != livein_copy[instr1]:
                 changed = True
 
+            # dict_print(livein, "livein")
+
         # Step 3: Compute liveout sets
     for index1, instr1 in enumerate(reversed(all_instructions)):
+        # print(f"instr1: {instr1}: {instr_dict[instr1]}")
         successors = get_successors(cfg, instr1, instr_dict, all_instructions)
         if not successors or len(successors) == 0:
             liveout[instr1] = set()
             continue
         for instr2 in successors:
+            # print(f"instr2: {instr2}: {instr_dict[instr2]}")
+            # print(f"livein2 {livein[instr2]}")
             if instr1 in liveout:
                 liveout[instr1] = liveout[instr1] | (livein[instr2])
             else:

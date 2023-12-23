@@ -34,12 +34,15 @@ compute:
 	movq	%r8, %r11
 	imulq	%rdx, %r11
 	movq	%r11, %r8
+	pushq	%rax
 	pushq	%rdx
 	movq	%rdi, %rax
 	cqto
 	idivq	%rsi
 	movq	%rax, %r8
 	popq	%rdx
+	popq	%rax
+	pushq	%rax
 	pushq	%rdx
 	movq	%r8, %rax
 	pushq	%r11
@@ -49,12 +52,16 @@ compute:
 	popq	%r11
 	movq	%rax, %r8
 	popq	%rdx
+	popq	%rax
+	pushq	%rax
 	pushq	%rdx
 	movq	%rdi, %rax
 	cqto
 	idivq	%rsi
 	movq	%rdx, %rsi
 	popq	%rdx
+	popq	%rax
+	pushq	%rax
 	pushq	%rdx
 	movq	%rsi, %rax
 	pushq	%r11
@@ -64,6 +71,7 @@ compute:
 	popq	%r11
 	movq	%rdx, %rsi
 	popq	%rdx
+	popq	%rax
 	movq	%rsi, %rax
 	movq	$2, %rax
 	pushq	%rcx

@@ -194,10 +194,10 @@ class AsmGen_x64_Linux(AsmGen):
         self._emit("movq", "%r11", self._temp(dst))
 
     def _emit_div(self, op1, op2, dst):
-        is_pop = False
+        if self._temp(dst) != "%rax":
+            self._emit("pushq", "%rax")
         if self.is_hold_ret:
-            is_pop = True
-            self._emit("pushq", "%rax")  # Save rax to stack
+            pass  # Save rax to stack
         elif dst == self.ret_temp:
             self.is_hold_ret = True
         self._emit("pushq", "%rdx")
@@ -213,18 +213,18 @@ class AsmGen_x64_Linux(AsmGen):
             self._emit("idivq", self._temp(op2))
         self._emit("movq", "%rax", self._temp(dst))
         self._emit("popq", "%rdx")
-        if is_pop:
+        if self._temp(dst) != "%rax":
             self._emit("popq", "%rax")
 
     def _emit_mod(self, op1, op2, dst):
-        is_pop = False
+        self._emit("pushq", "%rax")
         if self.is_hold_ret:
-            is_pop = True
-            self._emit("pushq", "%rax")  # Save rax to stack
+            pass
         elif dst == self.ret_temp:
             self.is_hold_ret = True
 
-        self._emit("pushq", "%rdx")
+        if self._temp(dst) != "%rdx":
+            self._emit("pushq", "%rdx")
         self._emit("movq", self._temp(op1), "%rax")
         if self._temp(op2) == "%rdx":
             self._emit("pushq", "%r11")
@@ -236,9 +236,9 @@ class AsmGen_x64_Linux(AsmGen):
             self._emit("cqto")
             self._emit("idivq", self._temp(op2))
         self._emit("movq", "%rdx", self._temp(dst))
-        self._emit("popq", "%rdx")
-        if is_pop:
-            self._emit("popq", "%rax")
+        if self._temp(dst) != "%rdx":
+            self._emit("popq", "%rdx")
+        self._emit("popq", "%rax")
 
     def _emit_and(self, op1, op2, dst):
         if dst == self.ret_temp:

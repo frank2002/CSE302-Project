@@ -80,30 +80,30 @@ def _main():
                 # cfg = tac2cfg(ptac)
                 cfg = uce(jthreading(tac2cfg(ptac)))
                 if detect_param_call_cfg(cfg):
-                    print("param call detected")
+                    # print("param call detected")
                     decl.tac = cfg2tac(cfg)
                     # print(f"tac: {decl.tac}")
                     continue
-                dict_print(cfg.cfg, "Original CFG\n")
+                # dict_print(cfg.cfg, "Original CFG\n")
                 ssa = SSA(cfg, decl.name, decl.arguments)
                 ssa.transform()
-                print("\n\n\n\n\n")
-                dict_print(ssa.ssa.cfg, "AFTER SSA\n")
-                print("\n\n\n\n\n")
+                # print("\n\n\n\n\n")
+                # dict_print(ssa.ssa.cfg, "AFTER SSA\n")
+                # print("\n\n\n\n\n")
                 alloc_record, stack_size = allocation(
                     ssa.ssa, decl.name, decl.arguments
                 )
                 cfg = ssa.destruct()
-                dict_print(cfg.cfg, "AFTER SSA DESTRUCT\n")
+                # dict_print(cfg.cfg, "AFTER SSA DESTRUCT\n")
 
                 decl.alloc = alloc_record
                 decl.stack_size = stack_size
                 decl.tac = cfg2tac(cfg)
                 decl.is_alloc = True
                 new_tac.append(decl)
-                print(f"stack_size: {decl.stack_size}")
-                print(f"alloc: {decl.alloc}")
-                print(f"proc @{decl.name}({', '.join(decl.arguments)}):")
+                # print(f"stack_size: {decl.stack_size}")
+                # print(f"alloc: {decl.alloc}")
+                # print(f"proc @{decl.name}({', '.join(decl.arguments)}):")
 
     abk = AsmGen.get_backend("x64-linux")
     asm = abk.lower(tac)

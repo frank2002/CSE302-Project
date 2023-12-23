@@ -1,0 +1,71 @@
+#############################################################################################################
+For the part of SSA of my testing program as an example, we have the following code:
+#############################################################################################################
+
+.L38: 
+phi_functions: {}
+body: [%3.15 = const 0, %4.16 = sub '%3.15', '%x']
+cjumps: [('jge', ['%4.16', '.L0'])]
+jump: ('jmp', '.L2')
+
+.L2: 
+phi_functions: {}
+body: [%7.12 = const 0, %6.13 = copy '%7.12']
+cjumps: []
+jump: ('jmp', '.L8')
+
+
+
+.L8: 
+phi_functions: {'%6.30': [('.L2', '%6.13'), ('.L15', '%6.38')], '%x.31': [('.L38', '%x'), ('.L15', '%x.35')]}
+body: [%11.32 = const 1, %12.33 = sub '%11.32', '%x.31']
+cjumps: [('jnz', ['%12.33', '.L9'])]
+jump: ('jmp', '.L41')
+
+#############################################################################################################
+live_in set of the instruction %7.12 = const 0 DOES NOT contain the %x.31 because %x.31 is defined in the .L8 phi-functions after .L2
+also for compute live_out of %7.12 = const 0 in .L2, %x.31 is not in the live_out set.
+We do not have an interference between %7.12 and %x.31
+#############################################################################################################
+
+
+
+After SSA deconstruction 
+VVVVVVVVVVVVVVVVVVVVVVVVV
+
+
+.L38: 
+phi_functions: {}
+body: [%3.15 = const 0, %4.16 = sub '%3.15', '%x', %x.31 = copy '%x']
+cjumps: [('jge', ['%4.16', '.L0'])]
+jump: ('jmp', '.L39')
+
+
+
+.L2: 
+phi_functions: {}
+body: [%7.12 = const 0, %6.13 = copy '%7.12', %6.30 = copy '%6.13']
+cjumps: []
+jump: ('jmp', '.L8')
+
+
+
+.L8: 
+phi_functions: {}
+body: [%11.32 = const 1, %12.33 = sub '%11.32', '%x.31']
+cjumps: [('jnz', ['%12.33', '.L9'])]
+jump: ('jmp', '.L41')
+
+
+
+#############################################################################################################
+After deconstruction, we have %x.31 defined in .L38 and used in .L8
+We have an interference between %7.12 and %x.31
+This cause the register allocation to fail becauase probably %7.12 and %x.31 are assigned to the same register, which overwrites the value of %x.31
+#############################################################################################################
+
+
+
+
+
+

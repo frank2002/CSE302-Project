@@ -19,7 +19,7 @@ class SSA:
         self._add_phi_functions()
         self._update_phi_functions()
 
-        print(f"before elimination, {self.cfg.cfg}")
+        # print(f"before elimination, {self.cfg.cfg}")
 
         is_changed = True
         uf = UnionFind()
