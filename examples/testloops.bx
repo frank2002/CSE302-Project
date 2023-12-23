@@ -1,20 +1,23 @@
 // prefix sums of the natural numbers using nested loops
-def main() {
-  var count = 20 : int;
-  var x = 0 : int;
-  var sum = 0 : int;
-  while (true) {
-    if (count == 0) { break; }
-    print(count);
-    x = 1;
-    sum = 0;
+def compute_sum(count: int, x: int, sum: int): int {
     while (true) {
-      if (x > count) { break; }
-      sum = sum + x;
-      x = x + 1;
+        if (x > count) { break; }
+        sum = sum + x;
+        x = x + 1;
     }
-    print(sum);
-    count = count - 1;
-  }
+    return sum;
+}
+
+def main() {
+    var count = 20: int;
+    var x = 0: int;
+    var sum = 0: int;
+    while (true) {
+        if (count == 0) { break; }
+        print(count);
+        sum = compute_sum(count, x, sum);
+        print(sum);
+        count = count - 1;
+    }
 }
 

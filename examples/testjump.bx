@@ -1,5 +1,4 @@
 // structured jumps (break, continue)
-
 proc main() {
   var mx = 30 : int;
   var x = 1 : int;
