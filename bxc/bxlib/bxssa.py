@@ -19,7 +19,7 @@ class SSA:
         self._add_phi_functions()
         self._update_phi_functions()
 
-        # print(f"before elimination, {self.cfg.cfg}")
+        print(f"before elimination, {self.cfg.cfg}")
 
         is_changed = True
         uf = UnionFind()
@@ -73,7 +73,11 @@ class SSA:
                 version = variable.split(".")[1]
                 is_same = True
                 for block_label2, variable2 in phi_function:
-                    version2 = variable2.split(".")[1]
+                    # print(f"variable2: {variable2}")
+                    if "." not in variable2:
+                        version2 = 0
+                    else:
+                        version2 = variable2.split(".")[1]
                     if version != version2:
                         is_same = False
                         break

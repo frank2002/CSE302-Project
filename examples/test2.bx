@@ -1,0 +1,29 @@
+def compute(x:int, y:int, z:int): int {
+    
+    if(x<=0){
+        return 0;
+    }
+    
+    var steps = 0 : int;
+
+    while(x!=1){
+        if(x%2==0){
+            x = x/2;
+        }else{
+            x = 3*x+1;
+        }
+        steps = steps + 1;
+    }
+    print(steps);
+    return steps;
+}
+
+def main() {
+    var x = 27 : int;
+    var y = 8 : int;
+    var z = 3 : int;
+    var result = 0 : int;
+
+    result = compute(x,y,z);
+    print(result);
+}

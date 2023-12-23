@@ -82,6 +82,9 @@ class InterferenceGraph:
 
         variables = variables - var_ignore if var_ignore else variables
 
+        print(f"variables: {variables}")
+        print(f"var_ignore: {var_ignore}")
+
         for var in variables:
             if var_ignore and var in var_ignore:
                 continue
@@ -119,12 +122,16 @@ class InterferenceGraph:
                 if instr_dict[instr][0] == "ret":
                     self.ret = instr_dict[instr][1][0]
                 for var1 in liveout[instr]:
+                    if var_ignore and var1 in var_ignore:
+                        continue
                     var2s = set(
                         var
                         for var in instr_dict[instr][1]
                         if isinstance(var, str) and var.startswith("%")
                     )
                     for var2 in var2s:
+                        if var_ignore and var2 in var_ignore:
+                            continue
                         if var1 != var2:
                             self.add_edge(var1, var2)
         # dict_print(self.graph, "graph")

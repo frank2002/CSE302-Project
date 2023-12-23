@@ -11,5 +11,7 @@ def main() {
     print(7);
   } else if (x % 11 == 0) {
     print(11);
-  } // no else
+  } else {
+    print(0);
+  }
 }

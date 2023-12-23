@@ -1,0 +1,46 @@
+def compute(a:int, b:int, c:int, d:int): int {
+    var result = (a>b):bool;
+    result = result && !(c > d);
+    var sum_values = 0: int;
+
+    while(a<b){
+        sum_values = sum_values + a + c - d;
+        a = a + 1;
+        if(a%2==0){
+            c = c + (b%a) << 1;
+        }else{
+            d = d + (b % a) >> 1;
+        }
+
+        result = result || (sum_values < d);
+
+        if(result && sum_values > 50){
+            sum_values = sum_values - (a * d) % c;
+        } else if (((!result) && (sum_values <= 50))){
+            sum_values = sum_values + (a + b) / 10;
+        }else{
+            sum_values = sum_values * 2;
+        }
+
+    }
+    var final_result = result && (sum_values > 100): bool;
+    var final_computation = 0:int;
+    if(final_result){
+        final_computation = sum_values * a + b -c;
+    }else{
+        final_computation = (sum_values % d);
+    }
+
+    return final_computation;
+}
+
+def main() {
+    var a = 5 : int;
+    var b = 25 : int;
+    var c = 15 : int;
+    var d = 10 : int;
+    var result = 0 : int;
+
+    result = compute(a,b,c,d);
+    print(result);
+}
